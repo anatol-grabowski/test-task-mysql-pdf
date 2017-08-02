@@ -8,7 +8,8 @@ function createPdfByFirstName (req, res) {
     .split('&')
     .map(q => q.split('='))
   const firstName = reqQuery.find(q => q[0] === 'firstName')[1] */
-  console.log('req.query:', req.query)
+  res.setHeader('Content-Type', 'application/json')
+	console.log('req.query:', req.query)
   const firstName = req.query.firstName
   
   const sql = `SELECT * FROM user WHERE firstName = ?`
