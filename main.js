@@ -1,37 +1,18 @@
 const denodeify = require('denodeify')
-const express = require('express')
 const PDFDocument = require('pdfkit')
-const mysql = require('mysql')
 
-const con = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: '', // db created through mysqld --initialize-insecure
-  database: 'mydb'
-})
-
-con.connect(err => {
-  if (err) throw err
-  console.log('connected to db')
-})
-
-const app = express()
-app.listen(80, () => {
-  console.log('listening')
-})
-
-app.get('/', (req, res) => {
-  res.send(`<form action="/firstName">
-    <input type="text" name="firstName" value="user"></input>
-    <input type="submit" value="submit"></input>
-  </form>`)
-})
-
-conQueryp = denodeify(con.query).bind(con)
-app.get('/firstName', (req, res) => {
+let conQueryp
+function createPdfByFirstName (req, res) {
+  /* if express is not used:
+  const reqQuery = req.url.replace(/(^[\w\W]*\?)/, '')
+    .split('&')
+    .map(q => q.split('='))
+  const firstName = reqQuery.find(q => q[0] === 'firstName')[1] */
   console.log('req.query:', req.query)
-  const sql = `SELECT * FROM user WHERE firstName = "${req.query.firstName}"`
-  conQueryp(sql)
+  const firstName = req.query.firstName
+  
+  const sql = `SELECT * FROM user WHERE firstName = ?`
+  conQueryp(sql, [firstName])
   .then( result => {
     if (result.length === 0) return Promise.reject()
     return result[0]
@@ -42,8 +23,8 @@ app.get('/firstName', (req, res) => {
   })
   .then( pdfBuff => {
     console.log('pdf created:', pdfBuff)
-    const sql = `UPDATE user SET ? WHERE firstName = "${req.query.firstName}"`
-    return conQueryp(sql, {pdf: pdfBuff})
+    const sql = `UPDATE user SET ? WHERE firstName = ?`
+    return conQueryp(sql, [{pdf: pdfBuff}, firstName])
   })
   .then( result => {
     console.log('pdf updated in db:', result)
@@ -52,12 +33,11 @@ app.get('/firstName', (req, res) => {
   .catch( err => {
     res.send('false')
   })
-})
+}
 
 function createPdf (user) {
   return new Promise(function executor (resolve, reject) {
     const doc = new PDFDocument
-     
     doc.text(user.firstName + ' ' + user.lastName, 100, 100)
     if (user.image) doc.image(user.image)
     doc.end()
@@ -65,8 +45,13 @@ function createPdf (user) {
     const buffs = []
     doc.on('data', data => buffs.push(data)) 
     doc.on('end', () => {
-      //require('fs').writeFileSync('file.pdf', Buffer.concat(buffs))
+      // require('fs').writeFileSync('file.pdf', Buffer.concat(buffs))
       resolve(Buffer.concat(buffs))
     })
   })
+}
+
+module.exports = function (con) {
+  conQueryp = denodeify(con.query).bind(con)
+  return createPdfByFirstName
 }
